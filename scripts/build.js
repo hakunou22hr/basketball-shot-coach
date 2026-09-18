@@ -1,7 +1,6 @@
 import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
 
 const required = new Map([
-  ['mediapipe/vision_bundle.js', 10_000],
   ['mediapipe/vision_bundle.mjs', 10_000],
   ['wasm/vision_wasm_internal.js', 1_000],
   ['wasm/vision_wasm_internal.wasm', 1_000_000],

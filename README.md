@@ -6,7 +6,7 @@ iPhone/iPad上でシュート動画を約12fpsで連続解析し、6フェーズ
 
 ブラウザが使うパスは次のとおりです。すべて`document.baseURI`相対なので、GitHub Pagesの`/basketball-shot-coach/`でも同一オリジンから読み込まれます。
 
-- JSランタイム: `mediapipe/vision_bundle.mjs`（検査用に`vision_bundle.js`も成果物へ収録）
+- JSランタイム: `mediapipe/vision_bundle.mjs`（アプリが実際にimportするESモジュール）
 - WASM: `wasm/`
 - Pose Landmarker Liteモデル: `models/pose_landmarker_lite.task`
 

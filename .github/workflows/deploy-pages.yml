@@ -60,7 +60,6 @@ jobs:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           for asset in \
-            mediapipe/vision_bundle.js \
             mediapipe/vision_bundle.mjs \
             wasm/vision_wasm_internal.js \
             wasm/vision_wasm_internal.wasm \
