@@ -1,23 +1,6 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { calculateRate, calculateStreak, getCoachTip } from '../src/shot-utils.js';
-
-test('calculateRate returns a rounded percentage', () => {
-  assert.equal(calculateRate(7, 10), 70);
-  assert.equal(calculateRate(2, 3), 67);
-  assert.equal(calculateRate(0, 0), 0);
-});
-
-test('calculateStreak counts consecutive UTC practice days', () => {
-  const sessions = [
-    { createdAt: '2026-09-18T08:00:00.000Z' },
-    { createdAt: '2026-09-17T08:00:00.000Z' },
-    { createdAt: '2026-09-15T08:00:00.000Z' },
-  ];
-  assert.equal(calculateStreak(sessions, new Date('2026-09-18T12:00:00.000Z')), 2);
-});
-
-test('getCoachTip adjusts guidance to the latest result', () => {
-  assert.match(getCoachTip({ made: 9, attempts: 10 }), /ナイスシュート/);
-  assert.match(getCoachTip({ made: 4, attempts: 10 }), /結果は気にしなくて大丈夫/);
-});
+import test from'node:test';import assert from'node:assert/strict';import{angle,analyzeFrame,inferPhases,phaseFrame,compareSequences,coachingTip,PHASES}from'../src/shot-utils.js';
+function pose(hipY=.55,elbowY=.35){const p=Array.from({length:33},()=>({x:.5,y:.5,visibility:1}));Object.assign(p[11],{x:.4,y:.25});Object.assign(p[12],{x:.6,y:.25});Object.assign(p[13],{x:.35,y:elbowY});Object.assign(p[14],{x:.65,y:elbowY});Object.assign(p[15],{x:.45,y:.4});Object.assign(p[16],{x:.75,y:.4});Object.assign(p[23],{x:.43,y:hipY});Object.assign(p[24],{x:.57,y:hipY});Object.assign(p[25],{x:.42,y:.72});Object.assign(p[26],{x:.58,y:.72});Object.assign(p[27],{x:.38,y:.9});Object.assign(p[28],{x:.64,y:.88});return p}
+test('angle calculates joint angle',()=>assert.equal(angle({x:0,y:0},{x:1,y:0},{x:1,y:1}),90));
+test('frame analysis stores bilateral and normalized sequence metrics',()=>{const m=analyzeFrame(pose(),250);assert.equal(m.timeMs,250);assert.ok(Number.isFinite(m.rightKnee));assert.ok(Number.isFinite(m.leftKnee));assert.ok(Number.isFinite(m.shootingElbow));assert.equal(m.stanceWidth,1.3);assert.equal(m.footOffset,-.1);assert.equal(m.confidence,100)});
+test('phase inference supports a manual release marker',()=>{const frames=[analyzeFrame(pose(.5),0),analyzeFrame(pose(.65),500),analyzeFrame(pose(.45),1000),analyzeFrame(pose(.52),1500)];const phases=inferPhases(frames,900);assert.deepEqual(phases.map(p=>p.name),PHASES);assert.equal(phases[3].manual,true);assert.equal(phaseFrame(frames,phases[3]).timeMs,1000)});
+test('sequence comparison aligns matching phases',()=>{const frames=[analyzeFrame(pose(.5),0),analyzeFrame(pose(.6),500),analyzeFrame(pose(.45),1000)];const current={frames,phases:inferPhases(frames,500)};const reference={frames,phases:inferPhases(frames,500)};const comparison=compareSequences(current,reference);assert.equal(comparison.length,6);assert.equal(comparison[3].metrics.shootingElbow,0);assert.match(coachingTip(comparison),/成功フォーム/) });

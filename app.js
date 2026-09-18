@@ -1,115 +1,36 @@
-import { calculateRate, calculateStreak, getCoachTip } from './src/shot-utils.js';
-
-const STORAGE_KEY = 'basketball-shot-coach:sessions';
-const form = document.querySelector('#shotForm');
-const madeInput = document.querySelector('#madeInput');
-const attemptInput = document.querySelector('#attemptInput');
-const liveRate = document.querySelector('#liveRate');
-const formError = document.querySelector('#formError');
-const historyList = document.querySelector('#historyList');
-const toast = document.querySelector('#toast');
-
-let sessions = loadSessions();
-
-function loadSessions() {
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
+import{CONNECTIONS,PHASES,analyzeFrame,inferPhases,phaseFrame,compareSequences,coachingTip}from'./src/shot-utils.js';
+const $=s=>document.querySelector(s);const STORE='shot-coach:sequence:v2';const ANALYSIS_FPS=12;let landmarker,current,videoUrl;let data=load();
+const requiredAssets=new Map([
+  ['./index.html',100],['./styles.css',100],['./app.js',100],['./src/shot-utils.js',100],
+  ['./manifest.webmanifest',100],['./icons/icon.svg',100],
+  ['./mediapipe/vision_bundle.mjs',10_000],
+  ['./wasm/vision_wasm_internal.js',1_000],['./wasm/vision_wasm_internal.wasm',1_000_000],
+  ['./wasm/vision_wasm_nosimd_internal.js',1_000],['./wasm/vision_wasm_nosimd_internal.wasm',1_000_000],
+  ['./models/pose_landmarker_lite.task',1_000_000],
+]);
+function load(){try{return JSON.parse(localStorage.getItem(STORE))||{reference:null,history:[]}}catch{return{reference:null,history:[]}}}function save(){localStorage.setItem(STORE,JSON.stringify(data))}const localUrl=path=>new URL(path,document.baseURI).href;
+async function setupAI(){try{setStatus('ローカルAIモデルを準備しています…');const{FilesetResolver,PoseLandmarker}=await import(localUrl('./mediapipe/vision_bundle.mjs'));const vision=await FilesetResolver.forVisionTasks(localUrl('./wasm/'));landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:localUrl('./models/pose_landmarker_lite.task'),delegate:'GPU'},runningMode:'VIDEO',numPoses:1});$('#offlineBadge').textContent='AI準備完了';$('#offlineBadge').className='ready';setStatus('動画を選択してください')}catch(error){$('#offlineBadge').textContent='AI読込エラー';setStatus('ローカルAIファイルを読み込めませんでした。オフライン準備を確認してください。');console.error(error)}}
+async function checkOffline(){
+  const list=$('#offlineFiles');list.innerHTML='確認中…';
+  const results=await Promise.all([...requiredAssets].map(async([path,minimumBytes])=>{try{
+    const response=await fetch(localUrl(path),{cache:'reload'});if(!response.ok)throw Error(`HTTP ${response.status}`);
+    const bytes=(await response.arrayBuffer()).byteLength;if(bytes<minimumBytes)throw Error(`${bytes} bytes`);
+    return{path,ok:true,bytes};
+  }catch(error){return{path,ok:false,error:error.message}}}));
+  const missing=results.filter(item=>!item.ok);
+  $('#offlineState').textContent=missing.length?`不足または不正なファイル: ${missing.length}件`:'✓ オフライン使用準備完了';
+  $('#offlineState').className=missing.length?'error':'ready';
+  list.innerHTML=missing.length?missing.map(item=>`<li>${item.path} — ${item.error}</li>`).join(''):results.map(item=>`<li>${item.path} — ${item.bytes.toLocaleString()} bytes</li>`).join('');
+  return!missing.length;
 }
-
-function saveSessions() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-}
-
-function updateLiveRate() {
-  const made = Number(madeInput.value);
-  const attempts = Number(attemptInput.value);
-  liveRate.textContent = attempts > 0 && made <= attempts ? `${calculateRate(made, attempts)}%` : '—';
-}
-
-function render() {
-  const totalMade = sessions.reduce((sum, item) => sum + item.made, 0);
-  const totalAttempts = sessions.reduce((sum, item) => sum + item.attempts, 0);
-  const overallRate = totalAttempts ? calculateRate(totalMade, totalAttempts) : null;
-  document.querySelector('#accuracyStat').textContent = overallRate === null ? '—' : `${overallRate}%`;
-  document.querySelector('#attemptStat').innerHTML = `${totalAttempts} <small>本</small>`;
-  document.querySelector('#streakStat').innerHTML = `${calculateStreak(sessions)} <small>日</small>`;
-  document.querySelector('#accuracyDelta').textContent = sessions.length ? `${sessions.length}セットの平均` : '最初のセットを記録しよう';
-  document.querySelector('#coachTip').textContent = getCoachTip(sessions[0]);
-  renderTrend();
-  renderHistory();
-}
-
-function renderTrend() {
-  const recent = sessions.slice(0, 5).reverse();
-  const chart = document.querySelector('#trendChart');
-  const labels = document.querySelector('#chartLabels');
-  if (!recent.length) {
-    chart.innerHTML = '<p class="empty-chart">記録するとグラフが表示されます</p>';
-    labels.innerHTML = '';
-    document.querySelector('#trendRate').textContent = '—';
-    return;
-  }
-  const rates = recent.map((item) => calculateRate(item.made, item.attempts));
-  chart.innerHTML = rates.map((rate) => `<span class="bar" style="--height:${Math.max(rate, 6)}%"><i>${rate}%</i></span>`).join('');
-  labels.innerHTML = recent.map((_, index) => `<span>${index + 1}</span>`).join('');
-  document.querySelector('#trendRate').textContent = `${rates.at(-1)}%`;
-}
-
-function renderHistory() {
-  if (!sessions.length) {
-    historyList.innerHTML = '<div class="empty-state"><strong>まだ記録がありません</strong><span>最初のセットを入力して、今日の練習を始めよう。</span></div>';
-    return;
-  }
-  historyList.innerHTML = sessions.slice(0, 6).map((item) => {
-    const date = new Intl.DateTimeFormat('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(item.createdAt));
-    return `<article class="history-item"><span class="history-rate">${calculateRate(item.made, item.attempts)}<small>%</small></span><div><strong>${item.zone}</strong><p>${item.made} / ${item.attempts}本 · ${item.feeling}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</p></div><time>${date}</time></article>`;
-  }).join('');
-}
-
-function escapeHtml(value) {
-  const element = document.createElement('span');
-  element.textContent = value;
-  return element.innerHTML;
-}
-
-form.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const made = Number(madeInput.value);
-  const attempts = Number(attemptInput.value);
-  if (!Number.isInteger(made) || !Number.isInteger(attempts) || attempts < 1 || made < 0 || made > attempts) {
-    formError.textContent = '成功数は、0以上かつ試投数以下で入力してください。';
-    return;
-  }
-  formError.textContent = '';
-  sessions.unshift({
-    id: crypto.randomUUID(), made, attempts,
-    zone: new FormData(form).get('zone'),
-    feeling: new FormData(form).get('feeling'),
-    note: document.querySelector('#noteInput').value.trim(),
-    createdAt: new Date().toISOString(),
-  });
-  saveSessions();
-  render();
-  form.reset();
-  madeInput.value = '7';
-  attemptInput.value = '10';
-  updateLiveRate();
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2400);
-});
-
-[madeInput, attemptInput].forEach((input) => input.addEventListener('input', updateLiveRate));
-document.querySelector('#clearButton').addEventListener('click', () => {
-  if (sessions.length && window.confirm('すべての記録を削除しますか？')) {
-    sessions = [];
-    saveSessions();
-    render();
-  }
-});
-document.querySelector('#themeButton').addEventListener('click', () => document.body.classList.toggle('light'));
-
-render();
+$('#offlineCheck').onclick=checkOffline;$('#cameraButton').onclick=()=>$('#videoInput').click();$('#videoInput').onchange=e=>{const file=e.target.files[0];if(!file)return;if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=URL.createObjectURL(file);const v=$('#video');v.src=videoUrl;$('#stage').hidden=false;$('#analysisControls').hidden=false;v.onloadedmetadata=resize;setStatus('解析区間を確認して「動画を連続解析」を押してください')};addEventListener('resize',resize);function resize(){const v=$('#video'),c=$('#overlay');c.width=v.videoWidth||640;c.height=v.videoHeight||360}
+const seek=(video,time)=>new Promise(resolve=>{const done=()=>{video.removeEventListener('seeked',done);resolve()};video.addEventListener('seeked',done);video.currentTime=Math.min(time,Math.max(0,video.duration-.001))});
+$('#analyzeButton').onclick=async()=>{if(!landmarker)return toast('AIモデルが利用できません');if(!await checkOffline())return setStatus('不足ファイルがあるため解析を開始できません');const v=$('#video');if(!v.duration)return;$('#analyzeButton').disabled=true;const frames=[],step=1/ANALYSIS_FPS;setStatus(`動画を約${ANALYSIS_FPS}fpsで解析中…`);try{for(let time=0;time<v.duration;time+=step){await seek(v,time);const result=landmarker.detectForVideo(v,time*1000);if(result.landmarks?.[0])frames.push({...analyzeFrame(result.landmarks[0],time*1000),landmarks:result.landmarks[0]});$('#progress').value=Math.min(1,time/v.duration);await new Promise(requestAnimationFrame)}if(!frames.length)throw Error('身体を検出できませんでした');const releaseMs=Number($('#releaseSlider').value)/100*v.duration*1000;current={frames,phases:inferPhases(frames,releaseMs),durationMs:Math.round(v.duration*1000),fps:ANALYSIS_FPS,releaseLandmarks:null};const release=current.phases.find(p=>p.name==='リリース付近');current.releaseLandmarks=phaseFrame(frames,release).landmarks||null;renderAnalysis();setStatus(`${frames.length}フレームを解析しました`)}catch(error){setStatus(error.message||'解析できませんでした')}finally{$('#analyzeButton').disabled=false;$('#progress').value=0}};
+$('#releaseSlider').oninput=()=>{$('#releaseValue').textContent=`${$('#releaseSlider').value}%`;if(current){const v=$('#video');current.phases=inferPhases(current.frames,Number($('#releaseSlider').value)/100*v.duration*1000);current.releaseLandmarks=phaseFrame(current.frames,current.phases[3]).landmarks||null;renderAnalysis()}};
+function renderAnalysis(){const phases=$('#phases');phases.innerHTML=current.phases.map(p=>`<button data-time="${p.timeMs}" class="${p.manual?'manual':''}"><b>${p.name}</b><small>${(p.timeMs/1000).toFixed(2)}秒</small></button>`).join('');phases.querySelectorAll('button').forEach(b=>b.onclick=async()=>{await seek($('#video'),Number(b.dataset.time)/1000);draw(current.releaseLandmarks)});const release=phaseFrame(current.frames,current.phases[3]);$('#metrics').innerHTML=metricCards(release);const comparison=data.reference?compareSequences(current,data.reference):[];$('#comparison').hidden=!comparison.length;$('#diffs').innerHTML=comparison.map(p=>`<article><b>${p.name}</b><span>膝 R ${signed(p.metrics.rightKnee)}° / L ${signed(p.metrics.leftKnee)}°</span><span>肘 ${signed(p.metrics.shootingElbow)}°</span><span>足幅 ${signed(p.metrics.stanceWidth)} / 前後 ${signed(p.metrics.footOffset)}</span></article>`).join('');$('#todayTip').textContent=coachingTip(comparison);$('#result').hidden=false;draw(current.releaseLandmarks);$('#result').scrollIntoView({behavior:'smooth'})}
+function metricCards(m){const items=[['右膝',m.rightKnee,'°'],['左膝',m.leftKnee,'°'],['シュート側肘',m.shootingElbow,'°'],['上体',m.trunk,'°'],['足幅',m.stanceWidth,'肩幅比'],['足の前後',m.footOffset,'肩幅比'],['腰の高さ',m.hipHeight,'肩幅比'],['肩の高さ',m.shoulderHeight,'肩幅比'],['信頼度',m.confidence,'%']];return items.map(([n,v,u])=>`<div><span>${n}</span><strong>${v}<small>${u}</small></strong></div>`).join('')}
+function signed(n){return`${n>0?'+':''}${n}`}function draw(points){const c=$('#overlay'),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);const skeleton=(p,color)=>{if(!p)return;x.strokeStyle=color;x.lineWidth=Math.max(3,c.width/180);for(const[a,b]of CONNECTIONS){if(!p[a]||!p[b])continue;x.beginPath();x.moveTo(p[a].x*c.width,p[a].y*c.height);x.lineTo(p[b].x*c.width,p[b].y*c.height);x.stroke()}};skeleton(data.reference?.releaseLandmarks,'#ff7650');skeleton(points,'#dcff45')}
+$('#makeButton').onclick=()=>record(true);$('#missButton').onclick=()=>record(false);function record(made){if(!current)return;const cleanFrames=current.frames.map(({landmarks,...frame})=>frame);const saved={...current,frames:cleanFrames,releaseLandmarks:current.releaseLandmarks?.map(({x,y,z,visibility})=>({x,y,z,visibility})),createdAt:new Date().toISOString(),made};data.history.unshift({...saved,releaseLandmarks:null});if(made)data.reference=saved;save();renderHistory();toast(made?'成功シーケンスを基準フォームに保存しました':'失敗を記録しました')}
+function renderHistory(){$('#history').innerHTML=data.history.length?data.history.slice(0,30).map(x=>`<article class="history"><b class="${x.made?'made':'miss'}">${x.made?'成功':'失敗'}</b><span>${new Date(x.createdAt).toLocaleString('ja-JP')}</span><small>${x.frames.length}フレーム · ${x.fps}fps · ${(x.durationMs/1000).toFixed(1)}秒</small></article>`).join(''):'<p class="empty">まだ記録がありません</p>'}
+$('#clearButton').onclick=()=>{if(confirm('基準フォームを含むすべての記録を削除しますか？')){data={reference:null,history:[]};save();renderHistory()}};function setStatus(s){$('#status').textContent=s}function toast(s){$('#toast').textContent=s;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2400)}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');renderHistory();checkOffline().then(ok=>ok&&setupAI());

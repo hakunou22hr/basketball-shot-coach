@@ -1,23 +1,10 @@
-export function calculateRate(made, attempts) {
-  if (!Number.isFinite(made) || !Number.isFinite(attempts) || attempts <= 0) return 0;
-  return Math.round((made / attempts) * 100);
-}
-
-export function calculateStreak(sessions, now = new Date()) {
-  const days = new Set(sessions.map(({ createdAt }) => new Date(createdAt).toISOString().slice(0, 10)));
-  let streak = 0;
-  const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  while (days.has(cursor.toISOString().slice(0, 10))) {
-    streak += 1;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  return streak;
-}
-
-export function getCoachTip(session) {
-  if (!session) return 'まずは10本。リングではなく、毎回同じフォームで打てたかに集中しよう。';
-  const rate = calculateRate(session.made, session.attempts);
-  if (rate >= 80) return 'ナイスシュート！ 好調な今こそ、足元からリリースまでのリズムを覚えておこう。';
-  if (rate >= 60) return 'いいリズムです。フォロースルーを残して、次のセットも同じ軌道を狙おう。';
-  return '結果は気にしなくて大丈夫。膝を柔らかく使い、リングの手前に集中してみよう。';
-}
+export const CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]];
+export const PHASES = ['構え','沈み込み','上昇','リリース付近','フォロースルー','着地'];
+const round = value => Math.round(value * 10) / 10;
+export function angle(a,b,c){if(!a||!b||!c)return null;const x=Math.atan2(c.y-b.y,c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);return round(Math.abs(Math.atan2(Math.sin(x),Math.cos(x))*180/Math.PI));}
+const visibility=(p,ids)=>round(ids.reduce((sum,id)=>sum+(p[id]?.visibility||0),0)/ids.length*100);
+export function analyzeFrame(p,timeMs){if(!p?.length)return null;const shoulderWidth=Math.max(Math.abs(p[11].x-p[12].x),.01);const hipY=(p[23].y+p[24].y)/2;const shoulderY=(p[11].y+p[12].y)/2;const leftVis=[11,13,15].reduce((s,i)=>s+(p[i]?.visibility||0),0);const rightVis=[12,14,16].reduce((s,i)=>s+(p[i]?.visibility||0),0);const shootingSide=rightVis>=leftVis?'right':'left';const elbow=shootingSide==='right'?angle(p[12],p[14],p[16]):angle(p[11],p[13],p[15]);return{timeMs:Math.round(timeMs),rightKnee:angle(p[24],p[26],p[28]),leftKnee:angle(p[23],p[25],p[27]),shootingElbow:elbow,trunk:angle({x:(p[23].x+p[24].x)/2,y:hipY-1},{x:(p[23].x+p[24].x)/2,y:hipY},{x:(p[11].x+p[12].x)/2,y:shoulderY}),stanceWidth:round(Math.abs(p[27].x-p[28].x)/shoulderWidth),footOffset:round((p[28].y-p[27].y)/shoulderWidth),hipHeight:round((1-hipY)/shoulderWidth),shoulderHeight:round((1-shoulderY)/shoulderWidth),confidence:visibility(p,[11,12,13,14,15,16,23,24,25,26,27,28]),shootingSide};}
+export function inferPhases(frames,manualReleaseMs=null){if(!frames.length)return[];const deepest=frames.reduce((a,b)=>b.hipHeight<a.hipHeight?b:a);const release=manualReleaseMs==null?frames.reduce((a,b)=>b.shootingElbow>a.shootingElbow?b:a):frames.reduce((a,b)=>Math.abs(b.timeMs-manualReleaseMs)<Math.abs(a.timeMs-manualReleaseMs)?b:a);const start=frames[0].timeMs,end=frames.at(-1).timeMs,down=Math.min(deepest.timeMs,release.timeMs),releaseTime=release.timeMs;const marks=[start,Math.max(start,down-100),Math.min(releaseTime,down+100),releaseTime,Math.min(end,releaseTime+250),end];return PHASES.map((name,i)=>({name,timeMs:marks[i],manual:name==='リリース付近'&&manualReleaseMs!=null}));}
+export function phaseFrame(frames,phase){return frames.reduce((a,b)=>Math.abs(b.timeMs-phase.timeMs)<Math.abs(a.timeMs-phase.timeMs)?b:a);}
+export function compareSequences(current,reference){return current.phases.map(phase=>{const refPhase=reference.phases.find(p=>p.name===phase.name);if(!refPhase)return null;const a=phaseFrame(current.frames,phase),b=phaseFrame(reference.frames,refPhase);return{name:phase.name,timeMs:a.timeMs,metrics:{rightKnee:round(a.rightKnee-b.rightKnee),leftKnee:round(a.leftKnee-b.leftKnee),shootingElbow:round(a.shootingElbow-b.shootingElbow),stanceWidth:round(a.stanceWidth-b.stanceWidth),footOffset:round(a.footOffset-b.footOffset)}}}).filter(Boolean);}
+export function coachingTip(comparison){if(!comparison?.length)return'成功フォームを登録すると、フェーズごとの差を確認できます';const release=comparison.find(p=>p.name==='リリース付近');const landing=comparison.find(p=>p.name==='着地');if(Math.abs(release?.metrics.shootingElbow||0)>8)return'リリース付近の肘角度を成功フォームへ近づけよう';if(Math.abs(landing?.metrics.footOffset||0)>.15)return'着地時の足の前後差を小さくしよう';return'成功フォームに近い動きです。タイミングをそろえよう';}
