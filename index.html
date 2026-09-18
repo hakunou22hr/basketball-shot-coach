@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#11130f" />
+    <meta name="description" content="シュート練習を記録し、成長につなげるバスケットボールコーチアプリ" />
+    <title>Basketball Shot Coach</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Basketball Shot Coach ホーム">
+          <span class="brand-mark" aria-hidden="true">B</span>
+          <span>SHOT <strong>COACH</strong></span>
+        </a>
+        <nav aria-label="メインナビゲーション">
+          <a class="active" href="#dashboard">ダッシュボード</a>
+          <a href="#log">記録する</a>
+          <a href="#history">履歴</a>
+        </nav>
+        <button class="icon-button" id="themeButton" type="button" aria-label="表示テーマを切り替える">◐</button>
+      </header>
+
+      <main>
+        <section class="hero" id="dashboard">
+          <div>
+            <p class="eyebrow">TODAY'S PRACTICE</p>
+            <h1>一本ずつ、<br /><em>理想のフォーム</em>へ。</h1>
+            <p class="hero-copy">感覚を記録して、成長を見える化。<br />今日のシュートを、次の一本につなげよう。</p>
+          </div>
+          <div class="hero-ball" aria-hidden="true"><span></span></div>
+        </section>
+
+        <section class="stats-grid" aria-label="練習サマリー">
+          <article class="stat-card accent">
+            <span class="stat-icon">◎</span>
+            <div><p>成功率</p><strong id="accuracyStat">—</strong><small id="accuracyDelta">最初のセットを記録しよう</small></div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">↗</span>
+            <div><p>総シュート</p><strong id="attemptStat">0 <small>本</small></strong><small>記録したすべての試投</small></div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">♨</span>
+            <div><p>継続日数</p><strong id="streakStat">0 <small>日</small></strong><small>積み重ねが自信になる</small></div>
+          </article>
+        </section>
+
+        <section class="workspace">
+          <article class="panel log-panel" id="log">
+            <div class="panel-heading">
+              <div><p class="eyebrow">QUICK LOG</p><h2>今日のセットを記録</h2></div>
+              <span class="step-label">01 / INPUT</span>
+            </div>
+            <form id="shotForm">
+              <fieldset>
+                <legend>コート位置</legend>
+                <div class="choice-grid" id="zoneChoices">
+                  <label><input type="radio" name="zone" value="ゴール下" /><span>ゴール下</span></label>
+                  <label><input type="radio" name="zone" value="ミドル" checked /><span>ミドル</span></label>
+                  <label><input type="radio" name="zone" value="3ポイント" /><span>3ポイント</span></label>
+                  <label><input type="radio" name="zone" value="フリースロー" /><span>フリースロー</span></label>
+                </div>
+              </fieldset>
+              <div class="number-row">
+                <label>成功<input id="madeInput" type="number" min="0" max="999" value="7" required /><span>本</span></label>
+                <div class="slash">/</div>
+                <label>試投<input id="attemptInput" type="number" min="1" max="999" value="10" required /><span>本</span></label>
+                <output id="liveRate" aria-live="polite">70%</output>
+              </div>
+              <fieldset>
+                <legend>フォームの感覚</legend>
+                <div class="feeling-options">
+                  <label><input type="radio" name="feeling" value="不調" /><span>不調</span></label>
+                  <label><input type="radio" name="feeling" value="普通" checked /><span>普通</span></label>
+                  <label><input type="radio" name="feeling" value="好調" /><span>好調</span></label>
+                </div>
+              </fieldset>
+              <label class="note-label">ひとことメモ（任意）<textarea id="noteInput" maxlength="80" placeholder="例：リリースを高く意識した"></textarea></label>
+              <p class="form-error" id="formError" role="alert"></p>
+              <button class="primary-button" type="submit"><span>記録を保存する</span><b>→</b></button>
+            </form>
+          </article>
+
+          <aside class="side-column">
+            <article class="panel coach-card">
+              <p class="eyebrow">COACH'S TIP</p>
+              <div class="coach-avatar" aria-hidden="true">C</div>
+              <blockquote id="coachTip">まずは10本。リングではなく、毎回同じフォームで打てたかに集中しよう。</blockquote>
+              <p>— YOUR SHOT COACH</p>
+            </article>
+            <article class="panel trend-card">
+              <div class="trend-heading"><div><p class="eyebrow">LAST 5 SETS</p><h2>最近の調子</h2></div><strong id="trendRate">—</strong></div>
+              <div class="chart" id="trendChart" aria-label="直近5セットの成功率グラフ"></div>
+              <div class="chart-labels" id="chartLabels"></div>
+            </article>
+          </aside>
+        </section>
+
+        <section class="history-section" id="history">
+          <div class="section-title"><div><p class="eyebrow">RECENT ACTIVITY</p><h2>最近の記録</h2></div><button id="clearButton" class="text-button" type="button">記録をリセット</button></div>
+          <div id="historyList" class="history-list"></div>
+        </section>
+      </main>
+      <footer><span>KEEP SHOOTING.</span><small>Basketball Shot Coach © 2026</small></footer>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite">記録を保存しました</div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
