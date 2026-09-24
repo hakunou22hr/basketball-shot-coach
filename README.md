@@ -49,3 +49,7 @@ PWA、Service Worker、カメラにはHTTPS（localhostは例外）が必要で�
 選手情報、選手ごとの基準フォーム、解析履歴は `shot-coach:players:v3` として端末の `localStorage` に保存します。保存データは `{ version, selectedPlayerId, players: [{ id, name, nickname, dominantHand, memo, reference, history }] }` の形で、動画そのものは保存・送信しません。
 
 初回起動時に旧キー `shot-coach:sequence:v2` の基準フォームまたは履歴が見つかると、「既存データ」という選手を一度だけ自動作成して `reference` と `history` を引き継ぎます。個人別画面と保存処理はすべて同梱されてService Workerにキャッシュされるため、初回のオフライン準備完了後は通信なしで選手追加・切替・解析・履歴閲覧ができます。
+
+## iPhone / iPadでの解析安定化
+
+端末負荷に合わせて解析FPSを自動選択し（iPhone 6fps、iPad 8fps、その他12fps）、各フレームの進捗率を表示します。Safariで発生することがある動画メタデータ読み込み・seek待ちの停止にはタイムアウトとエラー処理を設け、0秒または同一位置へのseekでは発火しない`seeked`イベントを待たないようにしています。
